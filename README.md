@@ -6,66 +6,57 @@ Standard Telescope history plugins function like bash history: you hit up/down a
 
 ## ✨ Features
 - **Visual History Dashboard**: Search through your previous Telescope queries.
+- **Per-picker history**: `J` (or your key) in find-files shows file history only; in live-grep, grep only; in buffers, buffer history only.
 - **Zero-Dependency Persistence**: Saves history across sessions using Neovim's native JSON encoding. No SQLite required.
 - **Live Terminal Preview**: Automatically runs `rg` or `fd` in the background as you hover over past searches, previewing the results instantly.
 - **Smart Deduplication**: Moves repeated searches to the top with a fresh timestamp.
 
 ## 📦 Installation
 
+Defaults are applied on load (`max_history = 10000`, `J` in normal mode to open per-picker history). No `setup()` call required.
+
 With [lazy.nvim](https://github.com/folke/lazy.nvim):
 
 ```lua
-{
-    "DomizianoScarcelli/metascope.nvim",
-    dependencies = { "nvim-telescope/telescope.nvim" },
-    config = function()
-        require("metascope").setup({
-            max_history = 10000, -- Maximum number of entries to save
-        })
-    end
-}
+{ "DomizianoScarcelli/metascope.nvim", dependencies = { "nvim-telescope/telescope.nvim" } }
 ```
 
-With [packer.nvim](https://github.com/wbthomason/packer.nvim)
+With [packer.nvim](https://github.com/wbthomason/packer.nvim):
+
 ```lua
-use {
-    "DomizianoScarcelli/metascope.nvim",
-    requires = { "nvim-telescope/telescope.nvim" },
-    config = function()
-        require("metascope").setup({
-            max_history = 10000, -- Maximum number of entries to save
-        })
-    end
-}
+use { "DomizianoScarcelli/metascope.nvim", requires = { "nvim-telescope/telescope.nvim" } }
+```
+
+Optional overrides:
+
+```lua
+require("metascope").setup({
+    max_history = 5000,
+    picker_history_keymap = "<C-h>", -- false to disable
+    picker_history_keymap_mode = { "n", "i" },
+})
 ```
 
 ## 🚀 Usage & Keymaps
+
+Use the metascope wrappers so each picker gets the right history type (`files`, `grep`, `buffers`). Press your configured key (e.g. `J` in normal mode) inside a picker to open history **for that picker only**.
+
 ```lua
-local builtin = require('telescope.builtin')
 local metascope = require("metascope")
 
--- 1. The Atuin-Style History Dashboard
+-- 1. The Atuin-Style History Dashboard (all types)
 vim.keymap.set('n', '<leader>fh', function() metascope.history_picker() end, { desc = "All Telescope History" })
--- You can also filter it! 
--- metascope.history_picker({ types = "files" })
--- metascope.history_picker({ types = { "files", "grep" } })
 
--- 2. Find Files (Wrapped)
-vim.keymap.set('n', '<leader>ff', function()
-    builtin.find_files({
-        prompt_title = "Find Files",
-        default_text = metascope.get_last_search("files"),
-        attach_mappings = metascope.make_attach_save_prompt("files"),
-        hidden = true,
-    })
-end, { desc = "Find files (Defaults to last file search)" })
+-- 2. Wrapped pickers (history type matches the picker)
+vim.keymap.set('n', '<leader>ff', function() metascope.find_files({ hidden = true }) end, { desc = "Find files" })
+vim.keymap.set('n', '<leader>fg', function() metascope.live_grep() end, { desc = "Live grep" })
+vim.keymap.set('n', '<leader>fb', function() metascope.buffers() end, { desc = "Buffers" })
 
--- 3. Live Grep (Wrapped)
-vim.keymap.set('n', '<leader>fg', function()
-    builtin.live_grep({
-        prompt_title = "Live Grep",
-        default_text = metascope.get_last_search("grep"),
-        attach_mappings = metascope.make_attach_save_prompt("grep"),
-    })
-end, { desc = "Live grep (Defaults to last grep)" })
+-- Optional: manual builtin wrap (keep default Telescope prompt titles for auto-detect)
+-- local builtin = require('telescope.builtin')
+-- vim.keymap.set('n', '<leader>ff', function()
+--     builtin.find_files(metascope.enrich_opts("files", { hidden = true }))
+-- end)
 ```
+
+Custom pickers: pass `metascope_type` in opts or use `metascope.enrich_opts("files", opts)`.
