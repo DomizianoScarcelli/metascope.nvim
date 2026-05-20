@@ -169,7 +169,7 @@ function M.history_picker(opts)
         layout_strategy = "horizontal",
         layout_config = {
             horizontal = {
-                mirror = true,
+                mirror = false,
                 preview_width = 0.55,
             }
         },
