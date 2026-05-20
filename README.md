@@ -24,6 +24,20 @@ With [lazy.nvim](https://github.com/folke/lazy.nvim):
         })
     end
 }
+```
+
+With [packer.nvim](https://github.com/wbthomason/packer.nvim)
+```lua
+use {
+    "DomizianoScarcelli/metascope.nvim",
+    requires = { "nvim-telescope/telescope.nvim" },
+    config = function()
+        require("metascope").setup({
+            max_history = 10000, -- Maximum number of entries to save
+        })
+    end
+}
+```
 
 ## 🚀 Usage & Keymaps
 ```lua
