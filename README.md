@@ -1,0 +1,1 @@
+# metascope.nvim
