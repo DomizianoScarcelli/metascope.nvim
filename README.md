@@ -60,3 +60,5 @@ vim.keymap.set('n', '<leader>fb', function() metascope.buffers() end, { desc = "
 ```
 
 Custom pickers: pass `metascope_type` in opts or use `metascope.enrich_opts("files", opts)`.
+
+`:Metascope` opens all history; `:Metascope files` filters by type. Telescope extension: `:Telescope metascope history`.
