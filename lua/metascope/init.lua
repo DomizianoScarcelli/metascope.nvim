@@ -25,6 +25,9 @@ M.picker_history_keymap = M.defaults.picker_history_keymap
 ---@type string|string[] Vim mode(s) for picker_history_keymap (e.g. "n", "i", or { "n", "i" }).
 M.picker_history_keymap_mode = M.defaults.picker_history_keymap_mode
 
+-- Local state to track positioning during inline arrow key history cycling
+local current_cycle_index = nil
+
 -- ==========================================
 -- SETUP & INITIALIZATION
 -- ==========================================
@@ -65,6 +68,32 @@ function M.setup(opts)
 
     M.build_detect_patterns()
     M.load_history()
+
+    -- Register the :Metascope command with tab completion
+    vim.api.nvim_create_user_command("Metascope", function(command_opts)
+        local arg = command_opts.args
+        if arg == "" or arg == "all" then
+            M.history_picker()
+        else
+            M.history_picker({ types = arg })
+        end
+    end, {
+        nargs = "?",
+        desc = "Open Metascope search history",
+        complete = function(ArgLead, _, _)
+            local types = { "all" }
+            for k, _ in pairs(M.type_config) do
+                table.insert(types, k)
+            end
+            local matches = {}
+            for _, t in ipairs(types) do
+                if t:match("^" .. ArgLead) then
+                    table.insert(matches, t)
+                end
+            end
+            return matches
+        end
+    })
 end
 
 function M.load_history()
@@ -228,12 +257,40 @@ function M.open_history_from_picker(search_type, prompt_bufnr)
     end, 50)
 end
 
+function M.cycle_history(prompt_bufnr, direction)
+    local picker = actions_state.get_current_picker(prompt_bufnr)
+    local search_type = M.detect_search_type(prompt_bufnr)
+
+    local filtered = {}
+    for _, entry in ipairs(M.telescope_history) do
+        if entry.type == search_type then
+            table.insert(filtered, entry)
+        end
+    end
+
+    if #filtered == 0 then return end
+
+    if current_cycle_index == nil then
+        current_cycle_index = direction == "next" and 1 or #filtered
+    else
+        current_cycle_index = current_cycle_index + (direction == "next" and 1 or -1)
+    end
+
+    if current_cycle_index > #filtered then current_cycle_index = 1 end
+    if current_cycle_index < 1 then current_cycle_index = #filtered end
+
+    local target_prompt = filtered[current_cycle_index].prompt
+    picker:set_prompt(target_prompt)
+end
+
 function M.make_attach_save_prompt(search_type)
     return function(prompt_bufnr, map)
         local picker = actions_state.get_current_picker(prompt_bufnr)
         if picker and search_type then
             picker._metascope_type = search_type
         end
+
+        current_cycle_index = nil -- Reset cycle index whenever a brand new picker is built
 
         local function current_type()
             return search_type or M.detect_search_type(prompt_bufnr)
@@ -278,6 +335,11 @@ function M.make_attach_save_prompt(search_type)
 
         map("i", "<CR>", save_prompt_and_select)
         map("n", "<CR>", save_prompt_and_select)
+
+        -- Inline prompt cycling via arrow keys
+        map("i", "<Up>", function() M.cycle_history(prompt_bufnr, "prev") end)
+        map("i", "<Down>", function() M.cycle_history(prompt_bufnr, "next") end)
+
         map_history_key()
         return true
     end
@@ -355,7 +417,8 @@ function M.history_picker(opts)
             end
         }),
         sorter = sorters.get_generic_fuzzy_sorter({}),
-        attach_mappings = function(prompt_bufnr)
+        attach_mappings = function(prompt_bufnr, map)
+            -- Replace select action to resume the picker with the chosen text
             actions_set.select:replace(function(_, _)
                 local selection = actions_state.get_selected_entry()
                 actions.close(prompt_bufnr)
@@ -375,6 +438,31 @@ function M.history_picker(opts)
                     end, 50)
                 end
             end)
+
+            -- Delete action to erase entries from history interactively
+            local delete_entry = function()
+                local current_picker = actions_state.get_current_picker(prompt_bufnr)
+                local selection = actions_state.get_selected_entry()
+                if not selection then return end
+
+                for i, entry in ipairs(M.telescope_history) do
+                    if entry.prompt == selection.value.prompt and entry.type == selection.value.type then
+                        table.remove(M.telescope_history, i)
+                        break
+                    end
+                end
+
+                M.save_history()
+
+                current_picker:delete_selection(function(sel)
+                    return sel.value.prompt == selection.value.prompt
+                end)
+            end
+
+            -- Bind deletion handlers specifically to the history dashboard layout
+            map("i", "<C-d>", delete_entry)
+            map("n", "dd", delete_entry)
+
             return true
         end,
     }):find()
