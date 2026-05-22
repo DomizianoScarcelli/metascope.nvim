@@ -1,6 +1,6 @@
 # metascope.nvim 🔭
 
-An Atuin-style, visual, searchable, cross-session prompt history for Telescope.
+An [Atuin](https://github.com/atuinsh/atuin)-style, visual, searchable, cross-session prompt history for Telescope.
 
 Standard Telescope history plugins function like bash history: you hit up/down arrows blindly. **Metascope** creates a unified dashboard of your past searches (files, grep, buffers) complete with deduplication, timestamps, and an executing live-preview of the results *before* you even hit enter.
 
