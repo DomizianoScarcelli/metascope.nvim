@@ -6,6 +6,7 @@ Standard Telescope history plugins function like bash history: you hit up/down a
 
 ## ✨ Features
 - **Hybrid files + history picker**: One picker that opens to your frecency-ranked recent files and reveals the full project tree the moment you start typing — frecent files stay biased to the top. The best `<leader>ff` replacement.
+- **Hybrid grep picker**: Empty prompt shows your frecency-ranked recent grep queries; start typing and it becomes an async live grep. Pick a recent query to jump straight to the line you opened from it, or re-run it.
 - **Jump to the destination, not the query**: Metascope records the file (and line) you opened, so selecting a history entry (`→` marked rows) takes you straight there. Press `<C-r>` to re-run the search instead.
 - **Frecency ranking**: History is ordered by frequency × recency, so the row you want is usually already at the top — no searching required.
 - **Project-aware**: Entries are tagged with the project (cwd) they came from and boosted when you're back in that project.
@@ -52,9 +53,10 @@ require("metascope").setup({
         find_command = nil,                    -- override the file-listing command, e.g. { "fd", "--type", "f" }
     },
 
-    -- Set the three keymaps for you. Use `true` for the recommended bindings,
-    -- a table to customise, or omit/false to bind them yourself (see below).
-    keymaps = true, -- <leader>ff find_files · <leader>fh history · <leader>fo hybrid
+    -- Set the keymaps for you. Use `true` for the recommended bindings, a table
+    -- to customise, or omit/false to bind them yourself (see below).
+    -- true binds: ff find_files · fg hybrid_grep · fh history · fo hybrid (files)
+    keymaps = true,
 })
 ```
 
@@ -81,32 +83,41 @@ vim.keymap.set("n", "<leader>fs", function()
 end)
 ```
 
-## 🚀 Three ways to search
+## 🚀 Ways to search
 
-Metascope gives you three distinct entry points; bind whichever you like (or all three).
+Metascope gives you several distinct entry points; bind whichever you like.
 
 | Function | What it does | Recommended key |
 | --- | --- | --- |
-| `metascope.find_files()` / `live_grep()` / `buffers()` | **Standard Telescope**, transparently recording history. Drop-in for the builtins. | `<leader>ff` / `fg` / `fb` |
+| `metascope.find_files()` / `live_grep()` / `buffers()` | **Standard Telescope**, transparently recording history. Drop-in for the builtins. | `<leader>ff` / `fb` |
+| `metascope.hybrid_grep()` | **Hybrid grep** — recent grep queries up front, async live grep as you type. | `<leader>fg` |
 | `metascope.history_picker()` | **The history dashboard** — fuzzy-search past queries & destinations across all types. | `<leader>fh` |
-| `metascope.hybrid()` | **Hybrid** — recent files (frecency-ranked) up front, full file tree on first keystroke. | `<leader>fo` |
+| `metascope.hybrid()` | **Hybrid files** — recent files (frecency-ranked) up front, full file tree on first keystroke. | `<leader>fo` |
 
-The quickest setup is `keymaps = true` in `setup()` (binds exactly the three above). To wire them yourself:
+The quickest setup is `keymaps = true` in `setup()` (binds `ff`/`fg`/`fh`/`fo` as above). To wire them yourself:
 
 ```lua
 local metascope = require("metascope")
 
 -- 1. Standard Telescope, with history recording
 vim.keymap.set('n', '<leader>ff', function() metascope.find_files({ hidden = true }) end, { desc = "Find files" })
-vim.keymap.set('n', '<leader>fg', function() metascope.live_grep() end, { desc = "Live grep" })
 vim.keymap.set('n', '<leader>fb', function() metascope.buffers() end, { desc = "Buffers" })
 
--- 2. The Atuin-style history dashboard (all types)
+-- 2. Hybrid grep (recent queries → async live grep)
+vim.keymap.set('n', '<leader>fg', function() metascope.hybrid_grep() end, { desc = "Hybrid grep" })
+
+-- 3. The Atuin-style history dashboard (all types)
 vim.keymap.set('n', '<leader>fh', function() metascope.history_picker() end, { desc = "Telescope history" })
 
--- 3. Hybrid files + frecency history
+-- 4. Hybrid files + frecency history
 vim.keymap.set('n', '<leader>fo', function() metascope.hybrid() end, { desc = "Hybrid files + history" })
 ```
+
+The hybrid grep keymaps (inside the picker):
+
+| Key | On a recent query | On a live match |
+| --- | --- | --- |
+| `<CR>` | Jump to the line you opened last time, or re-run it live (if no destination) | Open the file at that line |
 
 Inside the standard pickers, press your configured key (e.g. `J` in normal mode) to open history **for that picker only**.
 

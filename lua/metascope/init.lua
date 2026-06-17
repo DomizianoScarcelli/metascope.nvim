@@ -27,6 +27,7 @@ M.make_attach_save_prompt = mappings.attach_save_prompt
 M.history_picker = history_picker.open
 M.hybrid = hybrid.files
 M.hybrid_files = hybrid.files
+M.hybrid_grep = hybrid.grep
 
 -- Zero-config: apply defaults on first require so `:Metascope` and the wrappers
 -- work without an explicit setup(). Guarded so a later user setup() doesn't
