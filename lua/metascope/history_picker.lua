@@ -92,22 +92,34 @@ function M.open(opts)
         local time_str = entry.timestamp and ("[" .. entry.timestamp .. "] ") or ""
         local label = config.label or "Misc"
 
+        -- The file (and line) this search opened last time, if any.
+        local file_str = ""
+        if entry.target and entry.target.path then
+          file_str = vim.fn.fnamemodify(entry.target.path, ":~:.")
+          if entry.target.lnum then
+            file_str = file_str .. ":" .. entry.target.lnum
+          end
+        end
+
+        -- Show the query and, when known, the file it took you to.
         local body
         if entry.prompt and entry.prompt ~= "" then
           body = entry.prompt
-        elseif entry.target and entry.target.path then
-          body = vim.fn.fnamemodify(entry.target.path, ":~:.")
+          if file_str ~= "" then
+            body = body .. "  → " .. file_str
+          end
+        elseif file_str ~= "" then
+          body = "→ " .. file_str
         else
           body = "(empty)"
         end
 
-        -- "→" marks rows that jump straight to a destination.
-        local marker = (entry.target and entry.target.path) and "→ " or "  "
-        local display_str = string.format("%s%s%s[%s] %s", time_str, config.icon, marker, label, body)
+        local display_str = string.format("%s%s[%s] %s", time_str, config.icon, label, body)
         return {
           value = entry,
           display = display_str,
-          ordinal = (entry.prompt or "") .. " " .. body,
+          -- match on both the query and the filename when fuzzy-searching history
+          ordinal = (entry.prompt or "") .. " " .. file_str,
         }
       end,
     }),
