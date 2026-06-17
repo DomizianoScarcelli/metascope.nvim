@@ -5,6 +5,7 @@ An [Atuin](https://github.com/atuinsh/atuin)-style, visual, searchable, cross-se
 Standard Telescope history plugins function like bash history: you hit up/down arrows blindly. **Metascope** creates a unified dashboard of your past searches (files, grep, buffers) — and remembers *the file you actually opened*, so picking a history entry jumps you straight back there in one step instead of re-running a search and dumping you into a results list.
 
 ## ✨ Features
+- **Hybrid files + history picker**: One picker that opens to your frecency-ranked recent files and reveals the full project tree the moment you start typing — frecent files stay biased to the top. The best `<leader>ff` replacement.
 - **Jump to the destination, not the query**: Metascope records the file (and line) you opened, so selecting a history entry (`→` marked rows) takes you straight there. Press `<C-r>` to re-run the search instead.
 - **Frecency ranking**: History is ordered by frequency × recency, so the row you want is usually already at the top — no searching required.
 - **Project-aware**: Entries are tagged with the project (cwd) they came from and boosted when you're back in that project.
@@ -41,6 +42,19 @@ require("metascope").setup({
     cwd_boost = 4,                    -- frecency multiplier for entries from the current project
     half_life_days = 3,               -- recency decay: an entry's weight halves every N days
     save_debounce_ms = 1000,          -- coalesce rapid writes into one async flush
+
+    -- Hybrid files + history picker
+    hybrid = {
+        source_types = { "files", "buffers" }, -- history types that resolve to a file
+        frecency_bonus = 8,                    -- how strongly frecency biases ranking while typing
+        show_all_on_empty = false,             -- empty prompt: recents only (false) or whole tree (true)
+        cwd_only = true,                       -- only surface recents from the current project
+        find_command = nil,                    -- override the file-listing command, e.g. { "fd", "--type", "f" }
+    },
+
+    -- Set the three keymaps for you. Use `true` for the recommended bindings,
+    -- a table to customise, or omit/false to bind them yourself (see below).
+    keymaps = true, -- <leader>ff find_files · <leader>fh history · <leader>fo hybrid
 })
 ```
 
@@ -67,21 +81,36 @@ vim.keymap.set("n", "<leader>fs", function()
 end)
 ```
 
-## 🚀 Usage & Keymaps
+## 🚀 Three ways to search
 
-Use the metascope wrappers so each picker gets the right history type (`files`, `grep`, `buffers`). Press your configured key (e.g. `J` in normal mode) inside a picker to open history **for that picker only**.
+Metascope gives you three distinct entry points; bind whichever you like (or all three).
+
+| Function | What it does | Recommended key |
+| --- | --- | --- |
+| `metascope.find_files()` / `live_grep()` / `buffers()` | **Standard Telescope**, transparently recording history. Drop-in for the builtins. | `<leader>ff` / `fg` / `fb` |
+| `metascope.history_picker()` | **The history dashboard** — fuzzy-search past queries & destinations across all types. | `<leader>fh` |
+| `metascope.hybrid()` | **Hybrid** — recent files (frecency-ranked) up front, full file tree on first keystroke. | `<leader>fo` |
+
+The quickest setup is `keymaps = true` in `setup()` (binds exactly the three above). To wire them yourself:
 
 ```lua
 local metascope = require("metascope")
 
--- 1. The Atuin-Style History Dashboard (all types)
-vim.keymap.set('n', '<leader>fh', function() metascope.history_picker() end, { desc = "All Telescope History" })
-
--- 2. Wrapped pickers (history type matches the picker)
+-- 1. Standard Telescope, with history recording
 vim.keymap.set('n', '<leader>ff', function() metascope.find_files({ hidden = true }) end, { desc = "Find files" })
 vim.keymap.set('n', '<leader>fg', function() metascope.live_grep() end, { desc = "Live grep" })
 vim.keymap.set('n', '<leader>fb', function() metascope.buffers() end, { desc = "Buffers" })
 
+-- 2. The Atuin-style history dashboard (all types)
+vim.keymap.set('n', '<leader>fh', function() metascope.history_picker() end, { desc = "Telescope history" })
+
+-- 3. Hybrid files + frecency history
+vim.keymap.set('n', '<leader>fo', function() metascope.hybrid() end, { desc = "Hybrid files + history" })
+```
+
+Inside the standard pickers, press your configured key (e.g. `J` in normal mode) to open history **for that picker only**.
+
+```lua
 -- Optional: manual builtin wrap (keep default Telescope prompt titles for auto-detect)
 -- local builtin = require('telescope.builtin')
 -- vim.keymap.set('n', '<leader>ff', function()
