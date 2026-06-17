@@ -67,22 +67,52 @@ function M.register_type(name, cfg)
   detect.build_patterns()
 end
 
-function M.setup(opts)
-  opts = vim.tbl_deep_extend("force", vim.deepcopy(state.defaults), opts or {})
+-- The three entry points the user can bind: standard find_files (with history
+-- recording), the history dashboard, and the hybrid files+history picker.
+local function apply_keymaps(km)
+  if km == true then
+    km = { find_files = "<leader>ff", history = "<leader>fh", hybrid = "<leader>fo" }
+  end
+  if type(km) ~= "table" then
+    return km
+  end
+  local function bind(lhs, fn, desc)
+    if lhs then
+      vim.keymap.set("n", lhs, fn, { desc = desc, silent = true })
+    end
+  end
+  bind(km.find_files, function()
+    require("metascope").find_files()
+  end, "Metascope: find files (history-recording)")
+  bind(km.history, function()
+    require("metascope").history_picker()
+  end, "Metascope: history dashboard")
+  bind(km.hybrid, function()
+    require("metascope").hybrid()
+  end, "Metascope: hybrid files + history")
+  return km
+end
 
-  state.max_history = opts.max_history
-  state.picker_history_keymap = opts.picker_history_keymap
-  state.picker_history_keymap_mode = opts.picker_history_keymap_mode
-  state.resume_keymap = opts.resume_keymap
-  state.cwd_boost = opts.cwd_boost
-  state.half_life_days = opts.half_life_days
-  state.save_debounce_ms = opts.save_debounce_ms
+function M.setup(opts)
+  opts = opts or {}
+  local merged = vim.tbl_deep_extend("force", vim.deepcopy(state.defaults), opts)
+
+  state.max_history = merged.max_history
+  state.picker_history_keymap = merged.picker_history_keymap
+  state.picker_history_keymap_mode = merged.picker_history_keymap_mode
+  state.resume_keymap = merged.resume_keymap
+  state.cwd_boost = merged.cwd_boost
+  state.half_life_days = merged.half_life_days
+  state.save_debounce_ms = merged.save_debounce_ms
   state.type_config = vim.tbl_deep_extend("force", default_type_config(), opts.type_config or {})
+  -- Shallow merge so list options (e.g. source_types) replace cleanly.
+  state.hybrid = vim.tbl_extend("force", vim.deepcopy(state.defaults.hybrid), opts.hybrid or {})
 
   detect.build_patterns()
   history.load()
   command.register()
   ensure_autocmds()
+  state.keymaps = apply_keymaps(opts.keymaps)
 end
 
 return M

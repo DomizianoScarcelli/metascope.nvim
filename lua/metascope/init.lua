@@ -3,6 +3,7 @@ local config = require("metascope.config")
 local detect = require("metascope.detect")
 local history = require("metascope.history")
 local history_picker = require("metascope.history_picker")
+local hybrid = require("metascope.hybrid")
 local mappings = require("metascope.mappings")
 local pickers = require("metascope.pickers")
 
@@ -24,6 +25,8 @@ M.buffers = pickers.buffers
 M.open_history_from_picker = mappings.open_history_from_picker
 M.make_attach_save_prompt = mappings.attach_save_prompt
 M.history_picker = history_picker.open
+M.hybrid = hybrid.files
+M.hybrid_files = hybrid.files
 
 -- Zero-config: apply defaults on first require so `:Metascope` and the wrappers
 -- work without an explicit setup(). Guarded so a later user setup() doesn't
