@@ -1,24 +1,21 @@
 # metascope.nvim 🔭
 
-An [Atuin](https://github.com/atuinsh/atuin)-style, visual, searchable, cross-session prompt history for Telescope.
+**Your Telescope searches, remembered.** Metascope keeps a tidy history of every file you find, every grep you run, and every buffer you open — and takes you straight back to the exact file you opened last time, in a single keystroke.
 
-Standard Telescope history plugins function like bash history: you hit up/down arrows blindly. **Metascope** creates a unified dashboard of your past searches (files, grep, buffers) — and remembers *the file you actually opened*, so picking a history entry jumps you straight back there in one step instead of re-running a search and dumping you into a results list.
+![metascope in action](docs/demo.gif)
 
-## ✨ Features
-- **Hybrid files + history picker**: One picker that opens to your frecency-ranked recent files and reveals the full project tree the moment you start typing — frecent files stay biased to the top. The best `<leader>ff` replacement.
-- **Hybrid grep picker**: Empty prompt shows your frecency-ranked recent grep queries; start typing and it becomes an async live grep. Pick a recent query to jump straight to the line you opened from it, or re-run it.
-- **Jump to the destination, not the query**: Metascope records the file (and line) you opened, so selecting a history entry (`→` marked rows) takes you straight there. Press `<C-r>` to re-run the search instead.
-- **Frecency ranking**: History is ordered by frequency × recency, so the row you want is usually already at the top — no searching required.
-- **Project-aware**: Entries are tagged with the project (cwd) they came from and boosted when you're back in that project.
-- **Visual History Dashboard**: Fuzzy-search your previous queries and destinations with a live preview.
-- **Per-picker history**: `J` (or your key) in find-files shows file history only; in live-grep, grep only; in buffers, buffer history only.
-- **Zero-Dependency Persistence**: Saves history across sessions using Neovim's native JSON encoding — debounced, written off the main loop, and merge-safe across concurrent nvim instances. No SQLite required.
-- **Live Terminal Preview**: Previews the recorded file instantly; for query-only entries it runs `rg`/`fd` in the background.
-- **Extensible**: Register custom/extension pickers (LSP symbols, git files, …) with `register_type` + `track`.
+## ✨ What you get
+
+- **Opens to your recent files.** `<leader>fo` shows the files you actually work with first, then your whole project as soon as you start typing.
+- **Smarter grep.** `<leader>fg` starts from your recent searches, then becomes a live grep the moment you type.
+- **A searchable history.** `<leader>fh` opens a dashboard of everything you've searched — with a live preview. Pick one and jump right back to the file you opened from it.
+- **Remembers across sessions and projects.** Close Neovim, come back tomorrow, switch projects — your history follows you, and it surfaces what's relevant to where you are.
+- **The right history, per finder.** Press `J` inside a finder to see just that finder's past searches.
+- **No setup, no database.** Sensible defaults out of the box. Nothing to install or configure to get going.
 
 ## 📦 Installation
 
-Defaults are applied on load (`max_history = 10000`, `J` in normal mode to open per-picker history). No `setup()` call required.
+No `setup()` call is required — defaults are applied on load.
 
 With [lazy.nvim](https://github.com/folke/lazy.nvim):
 
@@ -32,45 +29,65 @@ With [packer.nvim](https://github.com/wbthomason/packer.nvim):
 use { "DomizianoScarcelli/metascope.nvim", requires = { "nvim-telescope/telescope.nvim" } }
 ```
 
-Optional overrides:
+## 🚀 Ways to search
+
+Metascope gives you a few different entry points. The fastest way to set them up is `keymaps = true` (see Configuration); or bind whichever you like yourself.
+
+| Function | What it does | Suggested key |
+| --- | --- | --- |
+| `metascope.hybrid()` | **Files** — your recent files first, the whole project as you type. | `<leader>fo` |
+| `metascope.hybrid_grep()` | **Grep** — your recent searches first, live grep as you type. | `<leader>fg` |
+| `metascope.history_picker()` | **History dashboard** — search everything you've ever looked for. | `<leader>fh` |
+| `metascope.find_files()` / `live_grep()` / `buffers()` | **Standard Telescope**, just with history quietly recorded. | `<leader>ff` / `fb` |
+
+```lua
+local metascope = require("metascope")
+
+vim.keymap.set("n", "<leader>fo", function() metascope.hybrid() end, { desc = "Files" })
+vim.keymap.set("n", "<leader>fg", function() metascope.hybrid_grep() end, { desc = "Grep" })
+vim.keymap.set("n", "<leader>fh", function() metascope.history_picker() end, { desc = "History" })
+vim.keymap.set("n", "<leader>ff", function() metascope.find_files({ hidden = true }) end, { desc = "Find files" })
+vim.keymap.set("n", "<leader>fb", function() metascope.buffers() end, { desc = "Buffers" })
+```
+
+Inside a picker:
+
+| Key | Action |
+| --- | --- |
+| `<CR>` | Open the file — for a remembered search, jump straight to the line you opened last time |
+| `<C-r>` | Re-run the search instead of jumping |
+| `<C-d>` / `dd` | Delete a history entry (in the dashboard) |
+| `J` | Open the history for *this* finder only |
+
+## ⚙️ Configuration
+
+Everything is optional. These are the defaults:
 
 ```lua
 require("metascope").setup({
-    max_history = 5000,
-    picker_history_keymap = "<C-h>", -- open per-picker history; false to disable
-    picker_history_keymap_mode = { "n", "i" },
-    resume_keymap = "<C-r>",          -- in the dashboard: re-run the search instead of jumping; false to disable
-    cwd_boost = 4,                    -- frecency multiplier for entries from the current project
-    half_life_days = 3,               -- recency decay: an entry's weight halves every N days
-    save_debounce_ms = 1000,          -- coalesce rapid writes into one async flush
+    max_history = 10000,
+    picker_history_keymap = "J",      -- open per-picker history; false to disable
+    picker_history_keymap_mode = "n",
+    resume_keymap = "<C-r>",          -- in the dashboard: re-run the search instead of jumping
+    cwd_boost = 4,                    -- favour results from the project you're in
+    half_life_days = 3,               -- how fast older entries fade in ranking
 
-    -- Hybrid files + history picker
     hybrid = {
-        source_types = { "files", "buffers" }, -- history types that resolve to a file
-        frecency_bonus = 8,                    -- how strongly frecency biases ranking while typing
-        show_all_on_empty = false,             -- empty prompt: recents only (false) or whole tree (true)
-        cwd_only = true,                       -- only surface recents from the current project
-        find_command = nil,                    -- override the file-listing command, e.g. { "fd", "--type", "f" }
+        source_types = { "files", "buffers" },
+        show_all_on_empty = false,    -- empty prompt: recents only (false) or whole tree (true)
+        cwd_only = true,              -- only show recents from the current project
+        find_command = nil,           -- override the file-listing command, e.g. { "fd", "--type", "f" }
     },
 
-    -- Set the keymaps for you. Use `true` for the recommended bindings, a table
-    -- to customise, or omit/false to bind them yourself (see below).
-    -- true binds: ff find_files · fg hybrid_grep · fh history · fo hybrid (files)
+    -- Bind the keymaps for you. `true` binds ff / fg / fh / fo as above;
+    -- pass a table to customise, or omit to bind them yourself.
     keymaps = true,
 })
 ```
 
-### Dashboard keymaps
-
-| Key | Action |
-| --- | --- |
-| `<CR>` | Jump to the recorded destination (or re-run the search if none) |
-| `<C-r>` | Re-run the original search |
-| `<C-d>` / `dd` | Delete the entry |
-
 ### Custom pickers
 
-Register a type once, then wrap any picker with `track` so its history is recorded and resumable:
+Teach metascope about any other picker (LSP symbols, git files, …) so it records and resumes them too:
 
 ```lua
 local metascope = require("metascope")
@@ -83,52 +100,10 @@ vim.keymap.set("n", "<leader>fs", function()
 end)
 ```
 
-## 🚀 Ways to search
+### Commands
 
-Metascope gives you several distinct entry points; bind whichever you like.
+`:Metascope` opens all history; `:Metascope files` filters by type. Also available as a Telescope extension: `:Telescope metascope history`.
 
-| Function | What it does | Recommended key |
-| --- | --- | --- |
-| `metascope.find_files()` / `live_grep()` / `buffers()` | **Standard Telescope**, transparently recording history. Drop-in for the builtins. | `<leader>ff` / `fb` |
-| `metascope.hybrid_grep()` | **Hybrid grep** — recent grep queries up front, async live grep as you type. | `<leader>fg` |
-| `metascope.history_picker()` | **The history dashboard** — fuzzy-search past queries & destinations across all types. | `<leader>fh` |
-| `metascope.hybrid()` | **Hybrid files** — recent files (frecency-ranked) up front, full file tree on first keystroke. | `<leader>fo` |
+## 💡 Inspiration
 
-The quickest setup is `keymaps = true` in `setup()` (binds `ff`/`fg`/`fh`/`fo` as above). To wire them yourself:
-
-```lua
-local metascope = require("metascope")
-
--- 1. Standard Telescope, with history recording
-vim.keymap.set('n', '<leader>ff', function() metascope.find_files({ hidden = true }) end, { desc = "Find files" })
-vim.keymap.set('n', '<leader>fb', function() metascope.buffers() end, { desc = "Buffers" })
-
--- 2. Hybrid grep (recent queries → async live grep)
-vim.keymap.set('n', '<leader>fg', function() metascope.hybrid_grep() end, { desc = "Hybrid grep" })
-
--- 3. The Atuin-style history dashboard (all types)
-vim.keymap.set('n', '<leader>fh', function() metascope.history_picker() end, { desc = "Telescope history" })
-
--- 4. Hybrid files + frecency history
-vim.keymap.set('n', '<leader>fo', function() metascope.hybrid() end, { desc = "Hybrid files + history" })
-```
-
-The hybrid grep keymaps (inside the picker):
-
-| Key | On a recent query | On a live match |
-| --- | --- | --- |
-| `<CR>` | Jump to the line you opened last time, or re-run it live (if no destination) | Open the file at that line |
-
-Inside the standard pickers, press your configured key (e.g. `J` in normal mode) to open history **for that picker only**.
-
-```lua
--- Optional: manual builtin wrap (keep default Telescope prompt titles for auto-detect)
--- local builtin = require('telescope.builtin')
--- vim.keymap.set('n', '<leader>ff', function()
---     builtin.find_files(metascope.enrich_opts("files", { hidden = true }))
--- end)
-```
-
-Custom pickers: pass `metascope_type` in opts or use `metascope.enrich_opts("files", opts)`.
-
-`:Metascope` opens all history; `:Metascope files` filters by type. Telescope extension: `:Telescope metascope history`.
+Metascope is inspired by [Atuin](https://github.com/atuinsh/atuin), which gives your shell history magical search and sync. Metascope brings that same "never lose what you searched for" feeling to Telescope.
