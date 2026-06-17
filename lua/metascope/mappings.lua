@@ -12,43 +12,40 @@ function M.open_history_from_picker(search_type, prompt_bufnr)
   local filtered = history.filter_by_type(search_type)
 
   if #filtered == 0 then
-    print("No search history found for " .. search_type .. "!")
+    vim.notify("Metascope: no history for '" .. search_type .. "' yet", vim.log.levels.INFO)
     return
   end
 
   local current_prompt = actions_state.get_current_line() or ""
   actions.close(prompt_bufnr)
-  vim.defer_fn(function()
+  -- Hand off on the next tick (no arbitrary delay) so the source picker has torn down.
+  vim.schedule(function()
     require("metascope.history_picker").open({
       types = search_type,
       default_text = current_prompt,
     })
-  end, 50)
+  end)
 end
 
-function M.cycle_history(prompt_bufnr, direction)
-  local picker = actions_state.get_current_picker(prompt_bufnr)
-  local search_type = detect.search_type(prompt_bufnr)
-  local filtered = history.filter_by_type(search_type)
-
-  if #filtered == 0 then
-    return
+-- Pull the concrete destination (file path + position) out of the selected
+-- Telescope entry so history can jump straight back to it later. Works across
+-- find_files (path), live_grep (filename/lnum/col) and buffers (bufnr).
+local function extract_target(entry)
+  if not entry then
+    return nil
   end
-
-  if state.cycle_index == nil then
-    state.cycle_index = direction == "next" and 1 or #filtered
-  else
-    state.cycle_index = state.cycle_index + (direction == "next" and 1 or -1)
+  local path = entry.path or entry.filename
+  if (not path or path == "") and entry.bufnr and vim.api.nvim_buf_is_valid(entry.bufnr) then
+    path = vim.api.nvim_buf_get_name(entry.bufnr)
   end
-
-  if state.cycle_index > #filtered then
-    state.cycle_index = 1
+  if not path or path == "" then
+    return nil
   end
-  if state.cycle_index < 1 then
-    state.cycle_index = #filtered
-  end
-
-  picker:set_prompt(filtered[state.cycle_index].prompt)
+  return {
+    path = vim.fn.fnamemodify(path, ":p"),
+    lnum = entry.lnum,
+    col = entry.col,
+  }
 end
 
 function M.attach_save_prompt(search_type)
@@ -58,8 +55,6 @@ function M.attach_save_prompt(search_type)
       picker._metascope_type = search_type
     end
 
-    state.cycle_index = nil
-
     local function current_type()
       return search_type or detect.search_type(prompt_bufnr)
     end
@@ -67,20 +62,16 @@ function M.attach_save_prompt(search_type)
     local function save_prompt_and_select()
       local t = current_type()
       local prompt = actions_state.get_current_line()
-      if prompt and prompt ~= "" then
-        history.push(prompt, t)
+      local target = extract_target(actions_state.get_selected_entry())
+      -- Record if there's a query to recall OR a concrete destination to return to.
+      if (prompt and prompt ~= "") or target then
+        history.push(prompt or "", t, target)
       end
       actions.select_default(prompt_bufnr)
     end
 
     map("i", "<CR>", save_prompt_and_select)
     map("n", "<CR>", save_prompt_and_select)
-    map("i", "<Up>", function()
-      M.cycle_history(prompt_bufnr, "prev")
-    end)
-    map("i", "<Down>", function()
-      M.cycle_history(prompt_bufnr, "next")
-    end)
 
     if state.picker_history_keymap then
       local modes = state.picker_history_keymap_mode

@@ -59,10 +59,13 @@ function M.search_type(prompt_bufnr)
     M.build_patterns()
   end
 
+  -- Title-sniffing is a last resort (explicit metascope_type is checked first
+  -- above). Require a reasonably long match so a short type name can't latch
+  -- onto an unrelated word and mislabel — better to fall back to "default".
   local best_type, best_len = nil, 0
   for type_name, patterns in pairs(state._detect_patterns) do
     for _, pattern in ipairs(patterns) do
-      if pattern ~= "" and title:find(pattern, 1, true) then
+      if #pattern >= 3 and title:find(pattern, 1, true) then
         local len = #pattern
         if len > best_len then
           best_len = len
