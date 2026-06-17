@@ -71,7 +71,12 @@ end
 -- recording), the history dashboard, and the hybrid files+history picker.
 local function apply_keymaps(km)
   if km == true then
-    km = { find_files = "<leader>ff", history = "<leader>fh", hybrid = "<leader>fo" }
+    km = {
+      find_files = "<leader>ff",
+      hybrid_grep = "<leader>fg",
+      history = "<leader>fh",
+      hybrid = "<leader>fo",
+    }
   end
   if type(km) ~= "table" then
     return km
@@ -84,6 +89,12 @@ local function apply_keymaps(km)
   bind(km.find_files, function()
     require("metascope").find_files()
   end, "Metascope: find files (history-recording)")
+  bind(km.live_grep, function()
+    require("metascope").live_grep()
+  end, "Metascope: live grep (history-recording)")
+  bind(km.hybrid_grep, function()
+    require("metascope").hybrid_grep()
+  end, "Metascope: hybrid grep + history")
   bind(km.history, function()
     require("metascope").history_picker()
   end, "Metascope: history dashboard")
