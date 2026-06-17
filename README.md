@@ -2,14 +2,17 @@
 
 An [Atuin](https://github.com/atuinsh/atuin)-style, visual, searchable, cross-session prompt history for Telescope.
 
-Standard Telescope history plugins function like bash history: you hit up/down arrows blindly. **Metascope** creates a unified dashboard of your past searches (files, grep, buffers) complete with deduplication, timestamps, and an executing live-preview of the results *before* you even hit enter.
+Standard Telescope history plugins function like bash history: you hit up/down arrows blindly. **Metascope** creates a unified dashboard of your past searches (files, grep, buffers) — and remembers *the file you actually opened*, so picking a history entry jumps you straight back there in one step instead of re-running a search and dumping you into a results list.
 
 ## ✨ Features
-- **Visual History Dashboard**: Search through your previous Telescope queries.
+- **Jump to the destination, not the query**: Metascope records the file (and line) you opened, so selecting a history entry (`→` marked rows) takes you straight there. Press `<C-r>` to re-run the search instead.
+- **Frecency ranking**: History is ordered by frequency × recency, so the row you want is usually already at the top — no searching required.
+- **Project-aware**: Entries are tagged with the project (cwd) they came from and boosted when you're back in that project.
+- **Visual History Dashboard**: Fuzzy-search your previous queries and destinations with a live preview.
 - **Per-picker history**: `J` (or your key) in find-files shows file history only; in live-grep, grep only; in buffers, buffer history only.
-- **Zero-Dependency Persistence**: Saves history across sessions using Neovim's native JSON encoding. No SQLite required.
-- **Live Terminal Preview**: Automatically runs `rg` or `fd` in the background as you hover over past searches, previewing the results instantly.
-- **Smart Deduplication**: Moves repeated searches to the top with a fresh timestamp.
+- **Zero-Dependency Persistence**: Saves history across sessions using Neovim's native JSON encoding — debounced, written off the main loop, and merge-safe across concurrent nvim instances. No SQLite required.
+- **Live Terminal Preview**: Previews the recorded file instantly; for query-only entries it runs `rg`/`fd` in the background.
+- **Extensible**: Register custom/extension pickers (LSP symbols, git files, …) with `register_type` + `track`.
 
 ## 📦 Installation
 
@@ -32,9 +35,36 @@ Optional overrides:
 ```lua
 require("metascope").setup({
     max_history = 5000,
-    picker_history_keymap = "<C-h>", -- false to disable
+    picker_history_keymap = "<C-h>", -- open per-picker history; false to disable
     picker_history_keymap_mode = { "n", "i" },
+    resume_keymap = "<C-r>",          -- in the dashboard: re-run the search instead of jumping; false to disable
+    cwd_boost = 4,                    -- frecency multiplier for entries from the current project
+    half_life_days = 3,               -- recency decay: an entry's weight halves every N days
+    save_debounce_ms = 1000,          -- coalesce rapid writes into one async flush
 })
+```
+
+### Dashboard keymaps
+
+| Key | Action |
+| --- | --- |
+| `<CR>` | Jump to the recorded destination (or re-run the search if none) |
+| `<C-r>` | Re-run the original search |
+| `<C-d>` / `dd` | Delete the entry |
+
+### Custom pickers
+
+Register a type once, then wrap any picker with `track` so its history is recorded and resumable:
+
+```lua
+local metascope = require("metascope")
+metascope.register_type("symbols", {
+    label = "Sym", icon = " ",
+    resume = function(opts) require("telescope.builtin").lsp_document_symbols(opts) end,
+})
+vim.keymap.set("n", "<leader>fs", function()
+    require("telescope.builtin").lsp_document_symbols(metascope.track("symbols", {}))
+end)
 ```
 
 ## 🚀 Usage & Keymaps

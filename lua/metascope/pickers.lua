@@ -44,4 +44,9 @@ function M.buffers(opts)
   builtin.buffers(M.enrich_opts("buffers", opts))
 end
 
+-- First-class hook for wrapping any picker (builtin or custom/extension) so it
+-- records metascope history. `metascope.track("symbols", opts)` returns enriched
+-- opts to pass straight into the underlying picker.
+M.track = M.enrich_opts
+
 return M
