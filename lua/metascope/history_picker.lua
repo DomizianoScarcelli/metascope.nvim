@@ -9,6 +9,7 @@ local history = require("metascope.history")
 local pickers_mod = require("metascope.pickers")
 local preview = require("metascope.preview")
 local state = require("metascope.state")
+local ui = require("metascope.ui")
 
 local M = {}
 
@@ -101,23 +102,33 @@ function M.open(opts)
           end
         end
 
-        -- Show the query and, when known, the file it took you to.
-        local body
+        -- Show the query and, when known, the file it took you to (with its filetype icon).
+        local parts = {
+          { time_str, "TelescopeResultsComment" },
+          { config.icon .. "[" .. label .. "] ", "TelescopeResultsIdentifier" },
+        }
+        local icon, icon_hl = "", nil
+        if file_str ~= "" then
+          icon, icon_hl = ui.file_icon(entry.target.path, opts)
+        end
         if entry.prompt and entry.prompt ~= "" then
-          body = entry.prompt
+          parts[#parts + 1] = { entry.prompt }
           if file_str ~= "" then
-            body = body .. "  → " .. file_str
+            parts[#parts + 1] = { "  → ", "TelescopeResultsComment" }
+            parts[#parts + 1] = { icon, icon_hl }
+            parts[#parts + 1] = { file_str, "TelescopeResultsComment" }
           end
         elseif file_str ~= "" then
-          body = "→ " .. file_str
+          parts[#parts + 1] = { "→ ", "TelescopeResultsComment" }
+          parts[#parts + 1] = { icon, icon_hl }
+          parts[#parts + 1] = { file_str }
         else
-          body = "(empty)"
+          parts[#parts + 1] = { "(empty)", "TelescopeResultsComment" }
         end
 
-        local display_str = string.format("%s%s[%s] %s", time_str, config.icon, label, body)
         return {
           value = entry,
-          display = display_str,
+          display = ui.display(parts),
           -- match on both the query and the filename when fuzzy-searching history
           ordinal = (entry.prompt or "") .. " " .. file_str,
         }

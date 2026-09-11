@@ -48,6 +48,25 @@ local function extract_target(entry)
   }
 end
 
+-- Bind `picker_history_keymap` (default "J") inside a picker so it opens the
+-- per-type history. `search_type` may be a string or a function returning one.
+-- Shared by the standard wrappers and the hybrid pickers.
+function M.bind_history_keymap(prompt_bufnr, map, search_type)
+  if not state.picker_history_keymap then
+    return
+  end
+  local modes = state.picker_history_keymap_mode
+  if type(modes) == "string" then
+    modes = { modes }
+  end
+  for _, mode in ipairs(modes) do
+    map(mode, state.picker_history_keymap, function()
+      local t = type(search_type) == "function" and search_type() or search_type
+      M.open_history_from_picker(t, prompt_bufnr)
+    end)
+  end
+end
+
 function M.attach_save_prompt(search_type)
   return function(prompt_bufnr, map)
     local picker = actions_state.get_current_picker(prompt_bufnr)
@@ -73,17 +92,7 @@ function M.attach_save_prompt(search_type)
     map("i", "<CR>", save_prompt_and_select)
     map("n", "<CR>", save_prompt_and_select)
 
-    if state.picker_history_keymap then
-      local modes = state.picker_history_keymap_mode
-      if type(modes) == "string" then
-        modes = { modes }
-      end
-      for _, mode in ipairs(modes) do
-        map(mode, state.picker_history_keymap, function()
-          M.open_history_from_picker(current_type(), prompt_bufnr)
-        end)
-      end
-    end
+    M.bind_history_keymap(prompt_bufnr, map, current_type)
 
     return true
   end
