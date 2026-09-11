@@ -12,7 +12,9 @@ local sorters = require("telescope.sorters")
 local conf = require("telescope.config").values
 
 local history = require("metascope.history")
+local mappings = require("metascope.mappings")
 local state = require("metascope.state")
+local ui = require("metascope.ui")
 
 local M = {}
 
@@ -98,7 +100,7 @@ end
 
 -- Memoize by raw-table identity: the dynamic finder re-maps every result on each
 -- keystroke, but the raw tables are stable, so we build each entry only once.
-local function make_entry_maker()
+local function make_entry_maker(opts)
   local cache = setmetatable({}, { __mode = "k" })
   return function(raw)
     local cached = cache[raw]
@@ -106,20 +108,16 @@ local function make_entry_maker()
       return cached
     end
     local rel = vim.fn.fnamemodify(raw.path, ":~:.")
-    local display
-    if raw.recent then
-      display = "★ " .. rel
-      if raw.count and raw.count > 1 then
-        display = display .. "  (" .. raw.count .. "×)"
-      end
-    else
-      display = "  " .. rel
+    local icon, icon_hl = ui.file_icon(raw.path, opts)
+    local parts = { { raw.recent and ui.STAR or "  ", ui.STAR_HL }, { icon, icon_hl }, { rel } }
+    if raw.recent and raw.count and raw.count > 1 then
+      parts[#parts + 1] = { "  (" .. raw.count .. "×)", "TelescopeResultsComment" }
     end
     local entry = {
       value = raw,
       path = raw.path,
       filename = raw.path,
-      display = display,
+      display = ui.display(parts),
       ordinal = rel,
     }
     cache[raw] = entry
@@ -155,7 +153,7 @@ function M.files(opts)
   local cached_files, merged
 
   local finder = finders.new_dynamic({
-    entry_maker = make_entry_maker(),
+    entry_maker = make_entry_maker(opts),
     fn = function(prompt)
       if (prompt == nil or prompt == "") and not cfg.show_all_on_empty then
         return recents
@@ -173,7 +171,8 @@ function M.files(opts)
     finder = finder,
     sorter = frecency_sorter(opts, cfg),
     previewer = conf.file_previewer(opts),
-    attach_mappings = function(prompt_bufnr, _)
+    attach_mappings = function(prompt_bufnr, map)
+      mappings.bind_history_keymap(prompt_bufnr, map, "files")
       actions_set.select:replace(function()
         local entry = actions_state.get_selected_entry()
         local prompt = actions_state.get_current_line()
@@ -232,12 +231,12 @@ local function grep_args()
   return vim.deepcopy(g.vimgrep_arguments or conf.vimgrep_arguments)
 end
 
-local function query_entry(raw)
-  local display = "★ " .. raw.prompt
+local function query_entry(raw, opts)
+  local parts = { { ui.STAR, ui.STAR_HL }, { raw.prompt } }
   if raw.count and raw.count > 1 then
-    display = display .. "  (" .. raw.count .. "×)"
+    parts[#parts + 1] = { "  (" .. raw.count .. "×)", "TelescopeResultsComment" }
   end
-  local e = { value = raw, display = display, ordinal = raw.prompt }
+  local e = { value = raw, ordinal = raw.prompt }
   if raw.target and raw.target.path then
     e.filename = raw.target.path -- lets the grep previewer show where it led
     e.lnum = raw.target.lnum
@@ -246,8 +245,12 @@ local function query_entry(raw)
     if raw.target.lnum then
       f = f .. ":" .. raw.target.lnum
     end
-    e.display = display .. "  → " .. f
+    local icon, icon_hl = ui.file_icon(raw.target.path, opts)
+    parts[#parts + 1] = { "  → ", "TelescopeResultsComment" }
+    parts[#parts + 1] = { icon, icon_hl }
+    parts[#parts + 1] = { f, "TelescopeResultsComment" }
   end
+  e.display = ui.display(parts)
   return e
 end
 
@@ -289,7 +292,7 @@ function M.grep(opts)
     __call = function(_, prompt, process_result, process_complete)
       if prompt == nil or prompt == "" then
         for _, r in ipairs(recents) do
-          process_result(query_entry(r))
+          process_result(query_entry(r, opts))
         end
         process_complete()
       else
@@ -303,7 +306,8 @@ function M.grep(opts)
     finder = finder,
     previewer = conf.grep_previewer(opts),
     sorter = sorters.highlighter_only(opts), -- rg already filtered; don't re-filter
-    attach_mappings = function(prompt_bufnr, _)
+    attach_mappings = function(prompt_bufnr, map)
+      mappings.bind_history_keymap(prompt_bufnr, map, "grep")
       actions_set.select:replace(function()
         local entry = actions_state.get_selected_entry()
         local prompt = actions_state.get_current_line()
