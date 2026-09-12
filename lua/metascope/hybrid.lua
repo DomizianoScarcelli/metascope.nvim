@@ -24,6 +24,7 @@ local DEFAULTS = {
   show_all_on_empty = false, -- empty prompt: recents only (false) or whole tree (true)
   cwd_only = true, -- only surface recents from the current project
   find_command = nil, -- override the file-listing command (list of args)
+  max_pinned = 5, -- grep: recent queries matching what you type, kept above live results
 }
 
 local function resolve_cfg(opts)
@@ -71,6 +72,8 @@ local function gather_recents(cfg)
           seen[p] = true
           out[#out + 1] = {
             path = p,
+            lnum = e.target.lnum, -- where you were last time (track_cursor)
+            col = e.target.col,
             recent = true,
             score = history.score(e, now, cwd),
             count = e.count or 1,
@@ -145,6 +148,22 @@ local function frecency_sorter(opts, cfg)
   return sorter
 end
 
+local function open_at(path, lnum, col)
+  vim.cmd("edit " .. vim.fn.fnameescape(path))
+  if lnum then
+    pcall(vim.api.nvim_win_set_cursor, 0, { lnum, math.max(0, (col or 1) - 1) })
+    vim.cmd("normal! zz")
+  end
+end
+
+local function title(opts, default)
+  local t = opts.prompt_title or default
+  if state.title_hint then
+    return ui.title_with_hint(t, state.picker_history_keymap)
+  end
+  return t
+end
+
 function M.files(opts)
   opts = opts or {}
   local cfg = resolve_cfg(opts)
@@ -167,7 +186,7 @@ function M.files(opts)
   })
 
   pickers.new(opts, {
-    prompt_title = opts.prompt_title or "Files (metascope)",
+    prompt_title = title(opts, "Files (metascope)"),
     finder = finder,
     sorter = frecency_sorter(opts, cfg),
     previewer = conf.file_previewer(opts),
@@ -185,9 +204,12 @@ function M.files(opts)
           return
         end
         -- Reinforce frecency: opening a file here records it like find_files does.
-        history.push(prompt or "", "files", { path = vim.fn.fnamemodify(path, ":p") })
+        local v = entry.value or {}
+        local recorded = history.push(prompt or "", "files", { path = vim.fn.fnamemodify(path, ":p") })
         vim.schedule(function()
-          vim.cmd("edit " .. vim.fn.fnameescape(path))
+          -- A recent file reopens where you left it; the position keeps following you.
+          open_at(path, v.lnum, v.col)
+          history.track_cursor(vim.api.nvim_get_current_buf(), recorded)
         end)
       end)
       return true
@@ -254,14 +276,6 @@ local function query_entry(raw, opts)
   return e
 end
 
-local function open_at(path, lnum, col)
-  vim.cmd("edit " .. vim.fn.fnameescape(path))
-  if lnum then
-    pcall(vim.api.nvim_win_set_cursor, 0, { lnum, math.max(0, (col or 1) - 1) })
-    vim.cmd("normal! zz")
-  end
-end
-
 function M.grep(opts)
   opts = opts or {}
   local cfg = resolve_cfg(opts)
@@ -296,13 +310,25 @@ function M.grep(opts)
         end
         process_complete()
       else
+        -- Recent queries that contain what you've typed stay pinned above the
+        -- live matches: re-running (or jumping back to) one is a few keys + <CR>.
+        local needle, n = prompt:lower(), 0
+        for _, r in ipairs(recents) do
+          if n >= (cfg.max_pinned or 0) then
+            break
+          end
+          if r.prompt:lower():find(needle, 1, true) then
+            process_result(query_entry(r, opts))
+            n = n + 1
+          end
+        end
         grep_job(prompt, process_result, process_complete)
       end
     end,
   })
 
   pickers.new(opts, {
-    prompt_title = opts.prompt_title or "Grep (metascope)",
+    prompt_title = title(opts, "Grep (metascope)"),
     finder = finder,
     previewer = conf.grep_previewer(opts),
     sorter = sorters.highlighter_only(opts), -- rg already filtered; don't re-filter
@@ -320,9 +346,10 @@ function M.grep(opts)
           -- A recent query: jump to where it took you, or re-run it live.
           if v.target and v.target.path and vim.fn.filereadable(v.target.path) == 1 then
             actions.close(prompt_bufnr)
-            history.push(v.prompt, "grep", v.target)
+            local recorded = history.push(v.prompt, "grep", v.target)
             vim.schedule(function()
               open_at(v.target.path, v.target.lnum, v.target.col)
+              history.track_cursor(vim.api.nvim_get_current_buf(), recorded)
             end)
           else
             -- re-run: switch the picker into live grep for this query (stays open)
@@ -335,13 +362,14 @@ function M.grep(opts)
           if not filename then
             return
           end
-          history.push(prompt or "", "grep", {
+          local recorded = history.push(prompt or "", "grep", {
             path = vim.fn.fnamemodify(filename, ":p"),
             lnum = entry.lnum,
             col = entry.col,
           })
           vim.schedule(function()
             open_at(filename, entry.lnum, entry.col)
+            history.track_cursor(vim.api.nvim_get_current_buf(), recorded)
           end)
         end
       end)
