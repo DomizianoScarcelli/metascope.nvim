@@ -67,15 +67,17 @@ function M.register_type(name, cfg)
   detect.build_patterns()
 end
 
--- The three entry points the user can bind: standard find_files (with history
--- recording), the history dashboard, and the hybrid files+history picker.
+-- Entry points the user can bind. find_files/live_grep are the hybrid pickers
+-- (history on an empty prompt); `hybrid`/`hybrid_grep` are kept as aliases.
 local function apply_keymaps(km)
   if km == true then
     km = {
       find_files = "<leader>ff",
-      hybrid_grep = "<leader>fg",
+      live_grep = "<leader>fg",
+      buffers = "<leader>fb",
       history = "<leader>fh",
-      hybrid = "<leader>fo",
+      last = "<leader>fl",
+      hybrid = "<leader>fo", -- alias of find_files, kept for muscle memory
     }
   end
   if type(km) ~= "table" then
@@ -88,19 +90,26 @@ local function apply_keymaps(km)
   end
   bind(km.find_files, function()
     require("metascope").find_files()
-  end, "Metascope: find files (history-recording)")
+  end, "Metascope: files (recents on empty prompt)")
   bind(km.live_grep, function()
     require("metascope").live_grep()
-  end, "Metascope: live grep (history-recording)")
-  bind(km.hybrid_grep, function()
-    require("metascope").hybrid_grep()
-  end, "Metascope: hybrid grep + history")
+  end, "Metascope: grep (recent queries on empty prompt)")
+  bind(km.buffers, function()
+    require("metascope").buffers()
+  end, "Metascope: buffers (history-recording)")
   bind(km.history, function()
     require("metascope").history_picker()
   end, "Metascope: history dashboard")
+  bind(km.last, function()
+    require("metascope").resume_last()
+  end, "Metascope: resume the last search")
+  -- backwards-compatible aliases
   bind(km.hybrid, function()
     require("metascope").hybrid()
   end, "Metascope: hybrid files + history")
+  bind(km.hybrid_grep, function()
+    require("metascope").hybrid_grep()
+  end, "Metascope: hybrid grep + history")
   return km
 end
 
@@ -111,6 +120,7 @@ function M.setup(opts)
   state.max_history = merged.max_history
   state.picker_history_keymap = merged.picker_history_keymap
   state.picker_history_keymap_mode = merged.picker_history_keymap_mode
+  state.title_hint = merged.title_hint
   state.resume_keymap = merged.resume_keymap
   state.cwd_boost = merged.cwd_boost
   state.half_life_days = merged.half_life_days

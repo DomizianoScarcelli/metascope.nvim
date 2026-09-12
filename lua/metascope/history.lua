@@ -8,12 +8,59 @@ local uv = vim.uv or vim.loop
 --   * a typed query  -> keyed on (type, cwd, prompt)
 --   * a bare pick     -> keyed on (type, cwd, destination path) so e.g. selecting
 --     several buffers (empty prompt) records one row per file instead of collapsing.
+--     The line is deliberately not part of the key: the cursor position is
+--     updated as you move around the file (see track_cursor) and must not fork
+--     the entry.
 function M.identity(entry)
   local key = entry.prompt
   if (not key or key == "") and entry.target and entry.target.path then
-    key = "@" .. entry.target.path .. ":" .. tostring(entry.target.lnum or "")
+    key = "@" .. entry.target.path
   end
   return table.concat({ entry.type or "", entry.cwd or "", key or "" }, "\0")
+end
+
+-- Destination identity: rows that end up in the same place (same type, cwd and
+-- file, plus line for grep) are one "place" to the user even if they were reached
+-- through different queries. Used by the dashboard to collapse duplicates.
+function M.destination(entry)
+  local t = entry.target
+  if not t or not t.path then
+    return nil
+  end
+  local lnum = entry.type == "grep" and t.lnum or nil
+  return table.concat({ entry.type or "", entry.cwd or "", t.path, tostring(lnum or "") }, "\0")
+end
+
+-- Collapse a list of entries by destination, keeping the best-scored row and
+-- summing visit counts. Entries without a destination pass through untouched.
+function M.collapse_by_destination(entries, now, cwd)
+  now = now or os.time()
+  local out, by_dest = {}, {}
+  for _, e in ipairs(entries) do
+    local d = M.destination(e)
+    if not d then
+      out[#out + 1] = e
+    else
+      local kept = by_dest[d]
+      if not kept then
+        local copy = vim.deepcopy(e)
+        copy.merged_count = e.count or 1
+        by_dest[d] = copy
+        out[#out + 1] = copy
+      else
+        kept.merged_count = kept.merged_count + (e.count or 1)
+        if M.score(e, now, cwd) > M.score(kept, now, cwd) then
+          -- take the better row's query/time but keep the accumulated count
+          local mc = kept.merged_count
+          for k, v in pairs(e) do
+            kept[k] = v
+          end
+          kept.merged_count = mc
+        end
+      end
+    end
+  end
+  return out
 end
 
 -- Frecency: frequency weighted by an exponential recency decay, then boosted
@@ -160,13 +207,21 @@ function M.save()
   )
 end
 
-function M.get_last(search_type)
+-- Most recent entry, optionally restricted to a type and/or the current cwd.
+function M.get_last_entry(search_type, cwd)
   local best
   for _, entry in ipairs(state.telescope_history) do
-    if entry.type == search_type and (not best or (entry.time or 0) > (best.time or 0)) then
-      best = entry
+    if (not search_type or entry.type == search_type) and (not cwd or entry.cwd == cwd) then
+      if not best or (entry.time or 0) > (best.time or 0) then
+        best = entry
+      end
     end
   end
+  return best
+end
+
+function M.get_last(search_type)
+  local best = M.get_last_entry(search_type)
   return best and best.prompt or ""
 end
 
@@ -188,6 +243,11 @@ function M.push(prompt, search_type, target)
     if M.identity(entry) == id then
       incoming.count = (entry.count or 1) + 1
       incoming.target = target or entry.target -- keep the prior destination if none captured now
+      -- A bare file pick has no line; keep the position track_cursor recorded last time.
+      local prev = entry.target
+      if target and prev and target.path == prev.path and not target.lnum and prev.lnum then
+        incoming.target = vim.tbl_extend("force", prev, target)
+      end
       table.remove(state.telescope_history, i)
       break
     end
@@ -195,6 +255,34 @@ function M.push(prompt, search_type, target)
 
   table.insert(state.telescope_history, 1, incoming)
   M.save()
+  return incoming
+end
+
+-- Keep `entry.target` pointing at where the cursor last was in `bufnr`, so a
+-- later jump back lands where you left off rather than at the top of the file.
+-- Updated on every BufLeave (and at exit) for as long as the buffer lives.
+function M.track_cursor(bufnr, entry)
+  if not entry or not entry.target or not bufnr or not vim.api.nvim_buf_is_valid(bufnr) then
+    return
+  end
+  local group = vim.api.nvim_create_augroup("MetascopeCursor" .. bufnr, { clear = true })
+  local function record()
+    if not vim.api.nvim_buf_is_valid(bufnr) then
+      return
+    end
+    local win = vim.fn.bufwinid(bufnr)
+    if win == -1 then
+      return
+    end
+    local pos = vim.api.nvim_win_get_cursor(win)
+    if entry.target.lnum ~= pos[1] or entry.target.col ~= pos[2] + 1 then
+      entry.target.lnum = pos[1]
+      entry.target.col = pos[2] + 1
+      M.save()
+    end
+  end
+  vim.api.nvim_create_autocmd({ "BufLeave", "BufWinLeave" }, { group = group, buffer = bufnr, callback = record })
+  vim.api.nvim_create_autocmd("VimLeavePre", { group = group, callback = record })
 end
 
 function M.remove(entry)
@@ -207,6 +295,26 @@ function M.remove(entry)
     end
   end
   return false
+end
+
+-- Remove every entry leading to the same destination as `entry` (a collapsed
+-- dashboard row stands for all of them). Falls back to identity removal.
+function M.remove_destination(entry)
+  local d = M.destination(entry)
+  if not d then
+    return M.remove(entry)
+  end
+  local removed = false
+  for i = #state.telescope_history, 1, -1 do
+    if M.destination(state.telescope_history[i]) == d then
+      table.remove(state.telescope_history, i)
+      removed = true
+    end
+  end
+  if removed then
+    M.save()
+  end
+  return removed
 end
 
 function M.filter_by_type(search_type)

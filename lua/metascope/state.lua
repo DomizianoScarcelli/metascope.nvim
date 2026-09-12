@@ -2,8 +2,12 @@ local M = {}
 
 M.defaults = {
   max_history = 10000,
-  picker_history_keymap = "J",
-  picker_history_keymap_mode = "n",
+  -- Inside any picker: open the history for that picker's type. Insert mode is
+  -- where telescope lives, so the default works without leaving it.
+  picker_history_keymap = "<C-h>",
+  picker_history_keymap_mode = { "i", "n" },
+  -- Show "· ^H history" in picker titles so the key is discoverable.
+  title_hint = true,
   -- In the history dashboard: re-run the search instead of jumping to the
   -- destination you opened last time. Set to false to disable.
   resume_keymap = "<C-r>",
@@ -20,8 +24,8 @@ M.defaults = {
     cwd_only = true, -- only surface recents from the current project
     find_command = nil, -- override the file-listing command (list of args)
   },
-  -- Keymaps: false (set none), true (recommended <leader>ff/fh/fo), or a table
-  -- { find_files = "<lhs>", history = "<lhs>", hybrid = "<lhs>" } (any may be false).
+  -- Keymaps: false (set none), true (recommended set, see config.lua), or a table
+  -- { find_files, live_grep, buffers, history, last = "<lhs>" } (any may be false).
   keymaps = false,
 }
 
@@ -31,6 +35,7 @@ M.telescope_history = {}
 M.type_config = {}
 M.picker_history_keymap = M.defaults.picker_history_keymap
 M.picker_history_keymap_mode = M.defaults.picker_history_keymap_mode
+M.title_hint = M.defaults.title_hint
 M.resume_keymap = M.defaults.resume_keymap
 M.cwd_boost = M.defaults.cwd_boost
 M.half_life_days = M.defaults.half_life_days

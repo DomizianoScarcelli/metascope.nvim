@@ -83,10 +83,20 @@ function M.attach_save_prompt(search_type)
       local prompt = actions_state.get_current_line()
       local target = extract_target(actions_state.get_selected_entry())
       -- Record if there's a query to recall OR a concrete destination to return to.
+      local recorded
       if (prompt and prompt ~= "") or target then
-        history.push(prompt or "", t, target)
+        recorded = history.push(prompt or "", t, target)
       end
       actions.select_default(prompt_bufnr)
+      -- Once the builtin action has opened the file, follow the cursor in it.
+      if recorded and target then
+        vim.schedule(function()
+          local bufnr = vim.fn.bufnr(target.path)
+          if bufnr ~= -1 then
+            history.track_cursor(bufnr, recorded)
+          end
+        end)
+      end
     end
 
     map("i", "<CR>", save_prompt_and_select)

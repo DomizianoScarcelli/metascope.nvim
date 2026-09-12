@@ -42,4 +42,45 @@ function M.display(parts)
   end
 end
 
+-- "just now", "5m ago", "3h ago", "2d ago", "3w ago" — from a unix time.
+function M.relative_time(t, now)
+  if not t then
+    return ""
+  end
+  local d = math.max(0, (now or os.time()) - t)
+  if d < 60 then
+    return "just now"
+  elseif d < 3600 then
+    return math.floor(d / 60) .. "m ago"
+  elseif d < 86400 then
+    return math.floor(d / 3600) .. "h ago"
+  elseif d < 7 * 86400 then
+    return math.floor(d / 86400) .. "d ago"
+  elseif d < 30 * 86400 then
+    return math.floor(d / (7 * 86400)) .. "w ago"
+  end
+  return math.floor(d / (30 * 86400)) .. "mo ago"
+end
+
+-- Short human form of a key for prompt-title hints: "<C-h>" -> "^H", "J" -> "J".
+function M.key_hint(lhs)
+  if type(lhs) ~= "string" or lhs == "" then
+    return nil
+  end
+  local ctrl = lhs:match("^<[Cc]%-(.)>$")
+  if ctrl then
+    return "^" .. ctrl:upper()
+  end
+  return lhs
+end
+
+-- "<title> · ^H history": tells people the history key exists without docs.
+function M.title_with_hint(title, lhs)
+  local hint = M.key_hint(lhs)
+  if not hint then
+    return title
+  end
+  return title .. " · " .. hint .. " history"
+end
+
 return M

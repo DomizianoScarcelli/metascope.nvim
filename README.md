@@ -6,11 +6,12 @@
 
 ## ✨ What you get
 
-- **Opens to your recent files.** `<leader>fo` shows the files you actually work with first, then your whole project as soon as you start typing.
-- **Smarter grep.** `<leader>fg` starts from your recent searches, then becomes a live grep the moment you type.
-- **A searchable history.** `<leader>fh` opens a dashboard of everything you've searched — with a live preview. Pick one and jump right back to the file you opened from it.
+- **Every picker opens to what you did last.** `<leader>ff` shows the files you actually work with first, then your whole project as soon as you start typing. `<leader>fg` starts from your recent searches, and keeps the ones matching what you type pinned above the live results.
+- **Back where you left off.** Files opened through metascope remember your cursor position; jumping back lands you on the line you were on, not at the top.
+- **A searchable history.** `<leader>fh` opens a dashboard of everything you've searched — one row per place, ranked by how often and how recently, with a live preview. `Tab` cycles the type filter.
+- **One key to resume.** `<leader>fl` reopens your last search with its query pre-filled.
 - **Remembers across sessions and projects.** Close Neovim, come back tomorrow, switch projects — your history follows you, and it surfaces what's relevant to where you are.
-- **The right history, per finder.** Press `J` inside a finder to see just that finder's past searches.
+- **The right history, per finder.** Press `<C-h>` inside a finder to see just that finder's past searches (the title reminds you: `· ^H history`).
 - **No setup, no database.** Sensible defaults out of the box. Nothing to install or configure to get going.
 
 ## 📦 Installation
@@ -35,29 +36,33 @@ Metascope gives you a few different entry points. The fastest way to set them up
 
 | Function | What it does | Suggested key |
 | --- | --- | --- |
-| `metascope.hybrid()` | **Files** — your recent files first, the whole project as you type. | `<leader>fo` |
-| `metascope.hybrid_grep()` | **Grep** — your recent searches first, live grep as you type. | `<leader>fg` |
+| `metascope.find_files()` | **Files** — your recent files first, the whole project as you type. | `<leader>ff` |
+| `metascope.live_grep()` | **Grep** — your recent searches first; matching ones stay pinned as you type. | `<leader>fg` |
+| `metascope.buffers()` | **Buffers** — standard Telescope, with history recorded. | `<leader>fb` |
 | `metascope.history_picker()` | **History dashboard** — search everything you've ever looked for. | `<leader>fh` |
-| `metascope.find_files()` / `live_grep()` / `buffers()` | **Standard Telescope**, just with history quietly recorded. | `<leader>ff` / `fb` |
+| `metascope.resume_last()` | **Resume** — reopen the last search with its query. | `<leader>fl` |
+
+Want the plain Telescope picker (still recorded)? Pass `hybrid = false`: `metascope.find_files({ hybrid = false })`. `metascope.hybrid()` / `hybrid_grep()` remain as aliases.
 
 ```lua
 local metascope = require("metascope")
 
-vim.keymap.set("n", "<leader>fo", function() metascope.hybrid() end, { desc = "Files" })
-vim.keymap.set("n", "<leader>fg", function() metascope.hybrid_grep() end, { desc = "Grep" })
-vim.keymap.set("n", "<leader>fh", function() metascope.history_picker() end, { desc = "History" })
-vim.keymap.set("n", "<leader>ff", function() metascope.find_files({ hidden = true }) end, { desc = "Find files" })
+vim.keymap.set("n", "<leader>ff", function() metascope.find_files() end, { desc = "Files" })
+vim.keymap.set("n", "<leader>fg", function() metascope.live_grep() end, { desc = "Grep" })
 vim.keymap.set("n", "<leader>fb", function() metascope.buffers() end, { desc = "Buffers" })
+vim.keymap.set("n", "<leader>fh", function() metascope.history_picker() end, { desc = "History" })
+vim.keymap.set("n", "<leader>fl", function() metascope.resume_last() end, { desc = "Resume last search" })
 ```
 
 Inside a picker:
 
 | Key | Action |
 | --- | --- |
-| `<CR>` | Open the file — for a remembered search, jump straight to the line you opened last time |
-| `<C-r>` | Re-run the search instead of jumping |
-| `<C-d>` / `dd` | Delete a history entry (in the dashboard) |
-| `J` | Open the history for *this* finder only |
+| `<CR>` | Open the file — for a remembered search, jump straight to where you were last time |
+| `<C-h>` | Open the history for *this* finder only |
+| `<C-r>` | Re-run the search instead of jumping (dashboard) |
+| `<Tab>` | Cycle the type filter: all → buffers → files → grep (dashboard) |
+| `<C-d>` / `dd` | Delete a history entry (dashboard) |
 
 ## ⚙️ Configuration
 
@@ -66,8 +71,9 @@ Everything is optional. These are the defaults:
 ```lua
 require("metascope").setup({
     max_history = 10000,
-    picker_history_keymap = "J",      -- open per-picker history; false to disable
-    picker_history_keymap_mode = "n",
+    picker_history_keymap = "<C-h>",  -- open per-picker history; false to disable
+    picker_history_keymap_mode = { "i", "n" },
+    title_hint = true,                -- show "· ^H history" in picker titles
     resume_keymap = "<C-r>",          -- in the dashboard: re-run the search instead of jumping
     cwd_boost = 4,                    -- favour results from the project you're in
     half_life_days = 3,               -- how fast older entries fade in ranking
@@ -77,10 +83,12 @@ require("metascope").setup({
         show_all_on_empty = false,    -- empty prompt: recents only (false) or whole tree (true)
         cwd_only = true,              -- only show recents from the current project
         find_command = nil,           -- override the file-listing command, e.g. { "fd", "--type", "f" }
+        max_pinned = 5,               -- grep: recent queries kept above live results while typing
     },
 
-    -- Bind the keymaps for you. `true` binds ff / fg / fh / fo as above;
-    -- pass a table to customise, or omit to bind them yourself.
+    -- Bind the keymaps for you. `true` binds ff / fg / fb / fh / fl as above (plus fo = ff);
+    -- pass a table { find_files = ..., live_grep = ..., buffers = ..., history = ..., last = ... }
+    -- to customise (any may be false), or omit to bind them yourself.
     keymaps = true,
 })
 ```
