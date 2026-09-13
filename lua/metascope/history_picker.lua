@@ -138,7 +138,7 @@ function M.open(opts)
     layout_config = {
       horizontal = {
         mirror = false,
-        preview_width = 0.55,
+        preview_width = 0.45, -- rows carry time · type · query · file; give them room
       },
     },
     previewer = preview.previewer,
@@ -232,7 +232,11 @@ function M.open(opts)
         local nxt = next_filter(opts.types)
         actions.close(prompt_bufnr)
         vim.schedule(function()
-          M.open(vim.tbl_extend("force", opts, { types = nxt, default_text = current_prompt }))
+          -- explicit assignment: "all" is types = nil, which tbl_extend can't set
+          local o = vim.deepcopy(opts)
+          o.types = nxt
+          o.default_text = current_prompt
+          M.open(o)
         end)
       end
       map("i", "<Tab>", cycle_filter)
