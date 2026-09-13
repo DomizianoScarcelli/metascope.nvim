@@ -124,6 +124,10 @@ end)
 
 `:Metascope` opens the dashboard; `:Metascope files` (or `grep`, `buffers`) filters by type. Also available as a Telescope extension: `:Telescope metascope history`.
 
+## AI transparency
+
+This plugin is **100% AI-written** (Claude, via Claude Code), built to scratch the maintainer's own itch and verified by using it — not by line-by-line review. Bugs, rough edges and surprising behaviour are expected; if you hit one, open an issue with a repro. The full note is in [AI_TRANSPARENCY.md](AI_TRANSPARENCY.md).
+
 ## Inspiration
 
 [Atuin](https://github.com/atuinsh/atuin) gave shell history search and sync; metascope brings that "never lose what you searched for" feeling to Telescope.
